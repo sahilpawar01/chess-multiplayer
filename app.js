@@ -18,9 +18,14 @@ const io = socket(server, {
     pingInterval: 25000
 });
 
-const chess = new Chess();
-let players = {};
-let currentPlayer = "w";
+// Store active games
+const games = {
+    default: {
+        chess: new Chess(),
+        players: {},
+        currentPlayer: 'w'
+    }
+};
 
 // Static files
 app.use(express.static(path.join(__dirname, "public")));
@@ -48,39 +53,49 @@ app.get('/health', (req, res) => {
 // Socket.IO connection handling
 io.on("connection", function (uniquesocket) {
     console.log("New client connected:", uniquesocket.id);
+    
+    // Send current game state to new connection
+    const game = games.default;
+    uniquesocket.emit("boardState", game.chess.fen());
 
-    if(!players.white){
-        players.white = uniquesocket.id;
+    if(!game.players.white){
+        game.players.white = uniquesocket.id;
         uniquesocket.emit("playerRole", "w");
-    } else if(!players.black){
-        players.black = uniquesocket.id;
+    } else if(!game.players.black){
+        game.players.black = uniquesocket.id;
         uniquesocket.emit("playerRole", "b");
     } else {
         uniquesocket.emit("spectatorRole");
     }
 
     uniquesocket.on("disconnect", function(){
-        if(uniquesocket.id === players.white){
-            delete players.white;
-        } else if(uniquesocket.id === players.black){
-            delete players.black;
+        if(uniquesocket.id === game.players.white){
+            delete game.players.white;
+        } else if(uniquesocket.id === game.players.black){
+            delete game.players.black;
         }
+        console.log("Client disconnected:", uniquesocket.id);
     });
 
     uniquesocket.on("move", (move) => {
         try {
-            if(chess.turn() === 'w' && uniquesocket.id !== players.white) return;
-            if(chess.turn() === 'b' && uniquesocket.id !== players.black) return;
+            if(game.chess.turn() === 'w' && uniquesocket.id !== game.players.white) return;
+            if(game.chess.turn() === 'b' && uniquesocket.id !== game.players.black) return;
 
-            const result = chess.move(move);
+            const result = game.chess.move(move);
             if(result){
-                currentPlayer = chess.turn();
+                game.currentPlayer = game.chess.turn();
                 io.emit("move", move);
-                io.emit("boardState", chess.fen());
+                io.emit("boardState", game.chess.fen());
             }
         } catch(err) {
             console.error("Move error:", err);
         }
+    });
+
+    // Add ping/pong to keep connection alive
+    uniquesocket.on("ping", () => {
+        uniquesocket.emit("pong");
     });
 });
 

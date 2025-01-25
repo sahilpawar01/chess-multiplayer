@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 
 .vercel
+
+# Render specific
+.render-buildlogs/

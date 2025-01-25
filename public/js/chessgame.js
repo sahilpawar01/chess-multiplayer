@@ -2,7 +2,7 @@ const socket = io(window.location.origin, {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: 5
+    reconnectionAttempts: Infinity // Keep trying to reconnect
 });
 const chess = new Chess();
 
@@ -156,8 +156,51 @@ socket.on('connect', () => {
     console.log('Connected to server');
 });
 
+// Add ping to keep connection alive
+setInterval(() => {
+    socket.emit("ping");
+}, 25000);
+
+socket.on("pong", () => {
+    console.log("Connection alive");
+});
+
+// Add reconnection handlers
+socket.on('reconnect_attempt', () => {
+    console.log('Attempting to reconnect...');
+});
+
+socket.on('reconnect', () => {
+    console.log('Reconnected to server');
+    // Request current game state
+    socket.emit("requestState");
+});
+
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
+});
+
+// Add this to show a loading message
+window.addEventListener('load', () => {
+    const loadingMessage = document.createElement('div');
+    loadingMessage.style.position = 'fixed';
+    loadingMessage.style.top = '10px';
+    loadingMessage.style.right = '10px';
+    loadingMessage.style.padding = '10px';
+    loadingMessage.style.backgroundColor = '#333';
+    loadingMessage.style.color = 'white';
+    loadingMessage.style.borderRadius = '5px';
+    loadingMessage.style.display = 'none';
+    loadingMessage.textContent = 'Reconnecting to server...';
+    document.body.appendChild(loadingMessage);
+
+    socket.on('disconnect', () => {
+        loadingMessage.style.display = 'block';
+    });
+
+    socket.on('connect', () => {
+        loadingMessage.style.display = 'none';
+    });
 });
 
 renderBoard();
