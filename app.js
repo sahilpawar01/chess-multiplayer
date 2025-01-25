@@ -18,12 +18,13 @@ const io = socket(server, {
     pingInterval: 25000
 });
 
-// Store active games
+// Store active games with initial position
 const games = {
     default: {
         chess: new Chess(),
         players: {},
-        currentPlayer: 'w'
+        currentPlayer: 'w',
+        moves: [] // Store move history
     }
 };
 
@@ -54,9 +55,11 @@ app.get('/health', (req, res) => {
 io.on("connection", function (uniquesocket) {
     console.log("New client connected:", uniquesocket.id);
     
-    // Send current game state to new connection
     const game = games.default;
+    
+    // Send current game state to new connection
     uniquesocket.emit("boardState", game.chess.fen());
+    uniquesocket.emit("moveHistory", game.moves);
 
     if(!game.players.white){
         game.players.white = uniquesocket.id;
@@ -79,18 +82,58 @@ io.on("connection", function (uniquesocket) {
 
     uniquesocket.on("move", (move) => {
         try {
-            if(game.chess.turn() === 'w' && uniquesocket.id !== game.players.white) return;
-            if(game.chess.turn() === 'b' && uniquesocket.id !== game.players.black) return;
+            // Validate player's turn
+            if(game.chess.turn() === 'w' && uniquesocket.id !== game.players.white) {
+                console.log("Not white player's turn");
+                return;
+            }
+            if(game.chess.turn() === 'b' && uniquesocket.id !== game.players.black) {
+                console.log("Not black player's turn");
+                return;
+            }
 
+            // Validate move
+            const possibleMoves = game.chess.moves({ verbose: true });
+            const isValidMove = possibleMoves.some(m => 
+                m.from === move.from && 
+                m.to === move.to
+            );
+
+            if (!isValidMove) {
+                console.log("Invalid move attempted:", move);
+                uniquesocket.emit("invalidMove", move);
+                return;
+            }
+
+            // Make the move
             const result = game.chess.move(move);
             if(result){
                 game.currentPlayer = game.chess.turn();
+                game.moves.push(move); // Store the move
                 io.emit("move", move);
                 io.emit("boardState", game.chess.fen());
+                
+                // Check game status
+                if(game.chess.isGameOver()) {
+                    let gameStatus = '';
+                    if(game.chess.isCheckmate()) gameStatus = 'checkmate';
+                    else if(game.chess.isDraw()) gameStatus = 'draw';
+                    else if(game.chess.isStalemate()) gameStatus = 'stalemate';
+                    
+                    io.emit("gameOver", gameStatus);
+                }
             }
         } catch(err) {
             console.error("Move error:", err);
+            uniquesocket.emit("error", "Invalid move");
         }
+    });
+
+    // Handle request for current game state
+    uniquesocket.on("requestState", () => {
+        const game = games.default;
+        uniquesocket.emit("boardState", game.chess.fen());
+        uniquesocket.emit("moveHistory", game.moves);
     });
 
     // Add ping/pong to keep connection alive

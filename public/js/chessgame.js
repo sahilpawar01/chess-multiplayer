@@ -203,6 +203,51 @@ window.addEventListener('load', () => {
     });
 });
 
+// Add handler for invalid moves
+socket.on("invalidMove", (move) => {
+    console.log("Invalid move:", move);
+    // Optionally show an error message to the user
+    const errorMessage = document.createElement('div');
+    errorMessage.style.position = 'fixed';
+    errorMessage.style.top = '50%';
+    errorMessage.style.left = '50%';
+    errorMessage.style.transform = 'translate(-50%, -50%)';
+    errorMessage.style.padding = '20px';
+    errorMessage.style.backgroundColor = '#ff4444';
+    errorMessage.style.color = 'white';
+    errorMessage.style.borderRadius = '5px';
+    errorMessage.style.zIndex = '1000';
+    errorMessage.textContent = 'Invalid move!';
+    document.body.appendChild(errorMessage);
+    
+    setTimeout(() => {
+        errorMessage.remove();
+    }, 2000);
+    
+    // Reset the board to the last valid state
+    renderBoard();
+});
+
+// Add handler for game over
+socket.on("gameOver", (status) => {
+    let message = "Game Over: ";
+    switch(status) {
+        case 'checkmate':
+            message += "Checkmate!";
+            break;
+        case 'draw':
+            message += "Draw!";
+            break;
+        case 'stalemate':
+            message += "Stalemate!";
+            break;
+        default:
+            message += "Game ended.";
+    }
+    
+    alert(message);
+});
+
 renderBoard();
 
 
