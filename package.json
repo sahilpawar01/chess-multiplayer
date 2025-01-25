@@ -1,23 +1,22 @@
 {
-  "name": "project",
+  "name": "chess-multiplayer",
   "version": "1.0.0",
-  "description": "",
+  "description": "Multiplayer chess game with Socket.IO",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon app.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": ">=18.x"
+  },
   "dependencies": {
     "chess.js": "^1.0.0",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
   },
-  "engines": {
-    "node": ">=18.x"
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }

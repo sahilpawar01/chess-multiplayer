@@ -7,12 +7,15 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.IO
+// Configure Socket.IO with additional options for Render
 const io = socket(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
-    }
+    },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 const chess = new Chess();
@@ -26,6 +29,20 @@ app.set("view engine", "ejs");
 // Routes
 app.get("/", (req, res) => {
     res.render("index");
+});
+
+// Add error handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
+// Health check endpoint - important for Render
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        time: new Date().toISOString()
+    });
 });
 
 // Socket.IO connection handling
@@ -67,14 +84,19 @@ io.on("connection", function (uniquesocket) {
     });
 });
 
-// Health check for Render
-app.get('/health', (req, res) => {
-    res.status(200).send('OK');
-});
-
+// Listen on all network interfaces
 const port = process.env.PORT || 3000;
 server.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
+});
+
+// Handle process errors
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
 });
 
 
