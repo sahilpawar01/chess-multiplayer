@@ -1,0 +1,12 @@
+# Render Blueprint — https://render.com/docs/infrastructure-as-code
+services:
+  - type: web
+    name: chess-multiplayer
+    runtime: node
+    branch: feature/v2-ui-and-features
+    buildCommand: npm install
+    startCommand: node app.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
