@@ -152,10 +152,9 @@
   <div class="toast-wrap" id="toasts" aria-live="polite"></div>
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js" crossorigin="anonymous"></script>
   <script>
     window.__INITIAL_ROOM__ = "<%= (initialRoom || '').replace(/[^A-Za-z0-9]/g, '') %>";
   </script>
-  <script src="/js/chess.js"></script>
+  <script type="module" src="/js/chess.js"></script>
 </body>
 </html>

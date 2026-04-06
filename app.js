@@ -194,8 +194,15 @@ io.on('connection', (sock) => {
         if (turn === 'w' && room.white !== sock.id) return;
         if (turn === 'b' && room.black !== sock.id) return;
         const moveObj = { from, to };
-        if (promotion) moveObj.promotion = promotion.slice(0, 1).toLowerCase();
-        const result = room.chess.move(moveObj);
+        if (promotion) moveObj.promotion = promotion.toString().slice(0, 1).toLowerCase();
+        let result;
+        try {
+            result = room.chess.move(moveObj);
+        } catch (err) {
+            console.warn('Invalid move:', moveObj, err.message || err);
+            sock.emit('invalidMove', { from, to });
+            return;
+        }
         if (!result) {
             sock.emit('invalidMove', { from, to });
             return;

@@ -30,6 +30,11 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   margin: 0;
@@ -39,6 +44,14 @@ body {
   font-family: "DM Sans", system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.45;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+#screen-game {
+  overflow-x: hidden;
 }
 
 h1,
@@ -406,7 +419,9 @@ button.ghost {
 
 .move-history {
   max-height: 220px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   font-family: "DM Mono", monospace;
   font-size: 0.85rem;
 }
@@ -543,7 +558,7 @@ button.ghost {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-width: 320px;
+  max-width: min(320px, calc(100vw - 2rem));
 }
 
 .toast {

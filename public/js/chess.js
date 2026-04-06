@@ -1,5 +1,6 @@
-(function () {
-  const socket = io(window.location.origin, {
+import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/esm/chess.js';
+
+const socket = window.io(window.location.origin, {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionAttempts: Infinity,
@@ -15,6 +16,7 @@
   let pendingPromo = null;
   let soundOn = true;
   let prevMoveCount = 0;
+  let lastHistoryLen = -1;
 
   const $ = (id) => document.getElementById(id);
 
@@ -222,7 +224,11 @@
       row.appendChild(b);
       els.moveHistory.appendChild(row);
     }
-    els.moveHistory.scrollTop = els.moveHistory.scrollHeight;
+    const grew = list.length > lastHistoryLen;
+    lastHistoryLen = list.length;
+    if (grew) {
+      els.moveHistory.scrollTop = els.moveHistory.scrollHeight;
+    }
   }
 
   let draggedPiece = null;
@@ -247,13 +253,7 @@
           pe.textContent = pieceChar(square);
           const myTurn = chess.turn() === square.color;
           const myPiece = role === square.color;
-          const ended =
-            typeof chess.isGameOver === 'function'
-              ? chess.isGameOver()
-              : typeof chess.game_over === 'function'
-                ? chess.game_over()
-                : false;
-          pe.draggable = !!(myTurn && myPiece && !ended);
+          pe.draggable = !!(myTurn && myPiece && !chess.isGameOver());
           if (pe.draggable) pe.classList.add('draggable');
           pe.addEventListener('dragstart', (e) => {
             if (!pe.draggable) return;
@@ -308,12 +308,14 @@
       openPromoModal();
       return;
     }
-    submitMove(from, to, 'q');
+    submitMove(from, to);
   }
 
   function submitMove(from, to, promotion) {
     const before = chess.fen();
-    socket.emit('move', { roomId, from, to, promotion });
+    const payload = { roomId, from, to };
+    if (promotion) payload.promotion = promotion;
+    socket.emit('move', payload);
     chess.load(before);
     renderBoard();
   }
@@ -535,7 +537,8 @@
 
   socket.on('invalidMove', () => {
     toast('Illegal move');
-    if (roomId) socket.emit('requestState', { roomId });
+    // Local FEN was already restored in submitMove(); avoid requestState + full
+    // re-render so move-history / page scrollbars do not flash.
   });
 
   socket.on('chat', (c) => {
@@ -574,6 +577,7 @@
     lastFrom = null;
     lastTo = null;
     prevMoveCount = 0;
+    lastHistoryLen = -1;
     toast('New game');
     applyState(data);
   });
@@ -585,4 +589,3 @@
   renderCoords();
   renderBoard();
   renderHistory([]);
-})();
