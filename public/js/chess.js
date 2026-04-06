@@ -18,6 +18,10 @@ const socket = window.io(window.location.origin, {
   let prevMoveCount = 0;
   let lastHistoryLen = -1;
   let lastGameStatus = 'waiting';
+  let selectedSquare = null;
+  let animationLock = false;
+  let pendingApplyPayload = null;
+  let ignoreBoardClick = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -75,6 +79,160 @@ const socket = window.io(window.location.origin, {
     const t = piece.type;
     const k = piece.color === 'w' ? t.toUpperCase() : t;
     return UNICODE[k] || '';
+  }
+
+  function epVictimSquare(from, to) {
+    if (Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) !== 1) return null;
+    return `${to[0]}${from[1]}`;
+  }
+
+  function clearSelection() {
+    selectedSquare = null;
+  }
+
+  function setSelection(sq) {
+    selectedSquare = sq;
+    renderBoard();
+  }
+
+  function clearMoveIndicators() {
+    els.board.querySelectorAll('.move-dot, .move-ring').forEach((el) => el.remove());
+    els.board.querySelectorAll('.piece.selected-piece').forEach((el) =>
+      el.classList.remove('selected-piece')
+    );
+  }
+
+  function refreshMoveIndicators() {
+    clearMoveIndicators();
+    if (!selectedSquare || lastGameStatus !== 'playing') return;
+    const vm = chess.moves({ square: selectedSquare, verbose: true });
+    vm.forEach((m) => {
+      const sq = els.board.querySelector(`.square[data-algebraic="${m.to}"]`);
+      if (!sq) return;
+      const el = document.createElement('div');
+      el.className = m.captured ? 'move-ring' : 'move-dot';
+      sq.appendChild(el);
+    });
+    const selSq = els.board.querySelector(`.square[data-algebraic="${selectedSquare}"]`);
+    const pe = selSq && selSq.querySelector('.piece');
+    if (pe) pe.classList.add('selected-piece');
+  }
+
+  function isLegalMove(from, to) {
+    const vm = chess.moves({ square: from, verbose: true });
+    return vm.some((m) => m.to === to);
+  }
+
+  function shouldAnimateState(payload) {
+    if (animationLock) return false;
+    if (!payload.fen || !payload.lastMove || !payload.lastMove.from || !payload.lastMove.to) {
+      return false;
+    }
+    if (!payload.movesSan || payload.movesSan.length !== prevMoveCount + 1) return false;
+    if (payload.fen === chess.fen()) return false;
+    return true;
+  }
+
+  function flushPendingApplyState() {
+    if (!pendingApplyPayload) return;
+    const p = pendingApplyPayload;
+    pendingApplyPayload = null;
+    applyState(p);
+  }
+
+  function runMoveAnimation(payload) {
+    animationLock = true;
+    const lm = payload.lastMove;
+    const from = lm.from;
+    const to = lm.to;
+    const moving = chess.get(from);
+    if (!moving) {
+      animationLock = false;
+      applyStateCore(payload);
+      flushPendingApplyState();
+      return;
+    }
+
+    const fromEl = els.board.querySelector(`.square[data-algebraic="${from}"]`);
+    const toEl = els.board.querySelector(`.square[data-algebraic="${to}"]`);
+    if (!fromEl || !toEl) {
+      animationLock = false;
+      applyStateCore(payload);
+      flushPendingApplyState();
+      return;
+    }
+
+    const fromPieceEl = fromEl.querySelector('.piece');
+    let victimEl = null;
+    let cap = chess.get(to);
+    if (!cap && lm.captured) {
+      const ep = epVictimSquare(from, to);
+      if (ep) {
+        const epSq = els.board.querySelector(`.square[data-algebraic="${ep}"]`);
+        victimEl = epSq && epSq.querySelector('.piece');
+      }
+    } else if (cap) {
+      victimEl = toEl.querySelector('.piece');
+    }
+
+    if (fromPieceEl) fromPieceEl.classList.add('piece-hidden');
+
+    const finish = () => {
+      const ghost = document.createElement('div');
+      ghost.className = `piece piece-slide-ghost ${moving.color === 'w' ? 'white' : 'black'}`;
+      ghost.textContent = pieceChar(moving);
+      if (fromPieceEl) {
+        const fs = window.getComputedStyle(fromPieceEl).fontSize;
+        ghost.style.fontSize = fs;
+      }
+      document.body.appendChild(ghost);
+      const r1 = fromEl.getBoundingClientRect();
+      const r2 = toEl.getBoundingClientRect();
+      ghost.style.left = `${r1.left}px`;
+      ghost.style.top = `${r1.top}px`;
+      ghost.style.width = `${r1.width}px`;
+      ghost.style.height = `${r1.height}px`;
+
+      const dx = r2.left - r1.left;
+      const dy = r2.top - r1.top;
+      const flip = role === 'b';
+      ghost.style.transition = 'none';
+      ghost.style.transform = flip ? 'rotate(180deg)' : 'translate(0,0)';
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          ghost.style.transition =
+            'transform 0.18s cubic-bezier(0.25, 0.1, 0.25, 1)';
+          ghost.style.transform = flip
+            ? `translate(${dx}px, ${dy}px) rotate(180deg)`
+            : `translate(${dx}px, ${dy}px)`;
+        });
+      });
+
+      let completed = false;
+      const done = () => {
+        if (completed) return;
+        completed = true;
+        ghost.remove();
+        animationLock = false;
+        applyStateCore(payload);
+        flushPendingApplyState();
+      };
+      ghost.addEventListener('transitionend', (e) => {
+        if (e.propertyName === 'transform') done();
+      });
+      setTimeout(() => {
+        if (ghost.parentNode) done();
+      }, 400);
+    };
+
+    if (victimEl && lm.captured) {
+      void victimEl.offsetWidth;
+      victimEl.classList.add('capture-victim');
+      setTimeout(finish, 120);
+    } else {
+      finish();
+    }
   }
 
   function fmtTime(ms) {
@@ -237,6 +395,16 @@ const socket = window.io(window.location.origin, {
   let sourceSquare = null;
 
   function renderBoard() {
+    if (chess.turn() !== role) {
+      selectedSquare = null;
+    }
+    if (selectedSquare) {
+      const sel = chess.get(selectedSquare);
+      if (!sel || sel.color !== role || chess.turn() !== role) {
+        selectedSquare = null;
+      }
+    }
+
     const board = chess.board();
     els.board.innerHTML = '';
     board.forEach((row, ri) => {
@@ -268,10 +436,17 @@ const socket = window.io(window.location.origin, {
             sourceSquare = algebraic;
             e.dataTransfer.setData('text/plain', '');
             e.dataTransfer.effectAllowed = 'move';
+            selectedSquare = algebraic;
+            refreshMoveIndicators();
           });
           pe.addEventListener('dragend', () => {
             draggedPiece = null;
             sourceSquare = null;
+            ignoreBoardClick = true;
+            setTimeout(() => {
+              ignoreBoardClick = false;
+            }, 50);
+            renderBoard();
           });
           sq.appendChild(pe);
         }
@@ -295,7 +470,41 @@ const socket = window.io(window.location.origin, {
     });
     if (role === 'b') els.board.classList.add('flipped');
     else els.board.classList.remove('flipped');
+    refreshMoveIndicators();
     getCapturedAndMaterial();
+  }
+
+  function onBoardClick(e) {
+    if (ignoreBoardClick) return;
+    if (lastGameStatus !== 'playing' || !role || chess.turn() !== role) return;
+    const sqEl = e.target.closest('.square');
+    if (!sqEl || !els.board.contains(sqEl)) return;
+    const alg = sqEl.dataset.algebraic;
+    if (!alg) return;
+    const pieceHere = chess.get(alg);
+
+    if (selectedSquare) {
+      if (alg === selectedSquare) {
+        clearSelection();
+        renderBoard();
+        return;
+      }
+      if (isLegalMove(selectedSquare, alg)) {
+        tryMove(selectedSquare, alg);
+        return;
+      }
+      if (pieceHere && pieceHere.color === role) {
+        setSelection(alg);
+        return;
+      }
+      clearSelection();
+      renderBoard();
+      return;
+    }
+
+    if (pieceHere && pieceHere.color === role) {
+      setSelection(alg);
+    }
   }
 
   function tryMove(from, to) {
@@ -311,6 +520,7 @@ const socket = window.io(window.location.origin, {
     }
     const piece = chess.get(from);
     if (!piece || piece.color !== role) return;
+    clearSelection();
     const isPromo =
       piece.type === 'p' &&
       ((role === 'w' && to.charAt(1) === '8') || (role === 'b' && to.charAt(1) === '1'));
@@ -352,6 +562,19 @@ const socket = window.io(window.location.origin, {
   }
 
   function applyState(payload) {
+    if (animationLock) {
+      pendingApplyPayload = payload;
+      return;
+    }
+    if (shouldAnimateState(payload)) {
+      clearSelection();
+      runMoveAnimation(payload);
+      return;
+    }
+    applyStateCore(payload);
+  }
+
+  function applyStateCore(payload) {
     if (!payload.abandonReason) {
       hideAbandonedModal();
     }
@@ -652,6 +875,8 @@ const socket = window.io(window.location.origin, {
   if (window.__INITIAL_ROOM__) {
     els.roomCode.value = window.__INITIAL_ROOM__;
   }
+
+  els.board.addEventListener('click', onBoardClick);
 
   renderCoords();
   renderBoard();

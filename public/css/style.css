@@ -32,12 +32,16 @@
 
 html {
   overflow-x: hidden;
-  scrollbar-gutter: stable;
+  /* Keep scroll stability on scrollable panels; gutter on html shrinks the layout box and can leave sliver gaps at edges */
+  scrollbar-gutter: auto;
 }
 
 html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
@@ -74,8 +78,14 @@ h3,
 #app {
   min-height: 100vh;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
 }
 
 .topbar {
@@ -84,6 +94,11 @@ h3,
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.5rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-self: stretch;
   padding: 0.65rem 1.25rem;
   padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
   padding-left: max(1rem, env(safe-area-inset-left, 0px));
@@ -626,10 +641,98 @@ button.ghost {
   color: #111;
 }
 
+/* ——— Move hints (chess.com–style) ——— */
+.move-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28%;
+  max-width: 18px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%) scale(0);
+  animation: move-dot-pop 0.15s ease-out forwards;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.square.light .move-dot {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.move-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%) scale(0);
+  animation: move-dot-pop 0.15s ease-out forwards;
+  pointer-events: none;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.square.light .move-ring {
+  border-color: rgba(0, 0, 0, 0.38);
+}
+
+@keyframes move-dot-pop {
+  to {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.piece.selected-piece {
+  transform: scale(1.15) translateY(-4px);
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+  z-index: 4;
+}
+
+.chessboard.flipped .piece.selected-piece {
+  transform: rotate(180deg) scale(1.15) translateY(-4px);
+}
+
+.piece.piece-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.capture-victim {
+  transition:
+    transform 0.12s ease-out,
+    opacity 0.12s ease-out;
+  transform: scale(1.4);
+  opacity: 0;
+  z-index: 3;
+}
+
+.piece-slide-ghost {
+  position: fixed;
+  z-index: 10000;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: transform 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
+  will-change: transform;
+  font-size: inherit;
+}
+
+.piece-slide-ghost.ghost-flipped {
+  transform: rotate(180deg);
+}
+
 .move-history {
   max-height: 220px;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   font-family: "DM Mono", monospace;
   font-size: 0.85rem;
@@ -664,6 +767,7 @@ button.ghost {
 .chat-log {
   height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   font-size: 0.9rem;
   margin-bottom: 0.5rem;
   padding: 0.5rem;
