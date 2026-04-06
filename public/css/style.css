@@ -73,6 +73,7 @@ h3,
 
 #app {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -81,7 +82,12 @@ h3,
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   padding: 0.65rem 1.25rem;
+  padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -132,6 +138,7 @@ h3,
 .screen {
   flex: 1;
   padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
@@ -140,6 +147,8 @@ h3,
 .lobby-card {
   max-width: 420px;
   margin: 3rem auto;
+  margin-left: auto;
+  margin-right: auto;
   padding: 2rem;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -191,6 +200,9 @@ button,
   color: var(--text);
   padding: 0.55rem 1rem;
   font-size: 0.95rem;
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -224,9 +236,206 @@ button.ghost {
   align-items: start;
 }
 
+/* ——— Tablet & mobile: single column, board first ——— */
 @media (max-width: 1024px) {
+  .screen {
+    padding: 0.65rem 0.75rem;
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  .lobby-card {
+    margin: 1rem auto 2rem;
+    padding: 1.25rem;
+  }
+
+  .lobby-card h1 {
+    font-size: 1.45rem;
+  }
+
   .game-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  /* Board & room actions first */
+  .center-col {
+    order: -1;
+    width: 100%;
+  }
+
+  .left-col {
+    order: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    align-items: start;
+  }
+
+  .left-col > h3,
+  .left-col > .material {
+    grid-column: 1 / -1;
+  }
+
+  .left-col > .player-card {
+    margin-bottom: 0;
+  }
+
+  .left-col > .captured-line {
+    grid-column: 1 / -1;
+    font-size: 1rem;
+  }
+
+  .right-col {
+    order: 2;
+  }
+
+  .panel {
+    padding: 0.85rem;
+  }
+
+  .timer {
+    font-size: 1.15rem;
+  }
+
+  .board-wrap {
+    padding: 1rem 1rem 0.85rem 1.1rem;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .chessboard {
+    width: min(92vw, 420px);
+    height: min(92vw, 420px);
+    max-width: 100%;
+    touch-action: none;
+  }
+
+  .piece {
+    font-size: clamp(24px, 11vw, 38px);
+  }
+
+  .move-history {
+    max-height: 160px;
+  }
+
+  .chat-log {
+    height: 140px;
+  }
+
+  .status-bar {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .center-col .status-bar {
+    flex-wrap: wrap;
+  }
+
+  .modal {
+    max-height: min(90vh, 100dvh);
+    overflow-y: auto;
+    margin: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-backdrop {
+    padding: max(0.75rem, env(safe-area-inset-top, 0px))
+      max(0.75rem, env(safe-area-inset-right, 0px))
+      max(0.75rem, env(safe-area-inset-bottom, 0px))
+      max(0.75rem, env(safe-area-inset-left, 0px));
+    align-items: flex-start;
+    padding-top: max(2rem, env(safe-area-inset-top, 0px));
+  }
+
+  .toast-wrap {
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    left: auto;
+  }
+
+  .field input,
+  .field select,
+  .chat-input-row input,
+  .controls select,
+  #theme-select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .controls select,
+  #theme-select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .btn-row {
+    flex-direction: column;
+  }
+
+  .btn-row button {
+    width: 100%;
+  }
+
+  .controls .btn-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .controls .btn-row button {
+    flex: 1;
+    min-width: calc(50% - 0.25rem);
+  }
+
+  .quick-msgs {
+    justify-content: flex-start;
+  }
+
+  .quick-msgs button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar .brand {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .topbar .logo {
+    font-size: 1.1rem;
+  }
+
+  .badge {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .chessboard {
+    width: min(96vw, 100%);
+    height: min(96vw, calc(100vw - 2rem));
+    touch-action: none;
+  }
+
+  .board-wrap {
+    padding: 0.65rem 0.65rem 0.5rem 0.8rem;
+  }
+
+  .files,
+  .ranks {
+    font-size: 0.55rem;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 1.1rem;
+  }
+
+  .player-card {
+    padding: 0.55rem;
   }
 }
 
