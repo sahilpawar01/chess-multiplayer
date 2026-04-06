@@ -40,6 +40,7 @@ function makeRoom(roomId) {
         drawOfferFrom: null,
         rematchWant: { w: false, b: false },
         lastMove: null,
+        abandonReason: null,
     };
 }
 
@@ -58,6 +59,7 @@ function getRoomState(room) {
         isGameOver: c.isGameOver(),
         inCheck: c.isCheck(),
         lastMove: room.lastMove,
+        abandonReason: room.abandonReason || null,
     };
 }
 
@@ -70,6 +72,19 @@ function resetRoomForRematch(room) {
     room.drawOfferFrom = null;
     room.rematchWant = { w: false, b: false };
     room.lastMove = null;
+    room.abandonReason = null;
+}
+
+function resetRoomForWaitingMatch(room) {
+    room.chess = new Chess();
+    room.whiteTime = ROOM_MS;
+    room.blackTime = ROOM_MS;
+    room.activeClock = null;
+    room.status = 'waiting';
+    room.drawOfferFrom = null;
+    room.rematchWant = { w: false, b: false };
+    room.lastMove = null;
+    room.abandonReason = null;
 }
 
 function cleanupSocketFromRoom(socketId) {
@@ -90,8 +105,16 @@ function cleanupSocketFromRoom(socketId) {
         delete rooms[roomId];
         return;
     }
-    io.to(roomId).emit('opponentDisconnected');
+    room.activeClock = null;
     room.status = 'ended';
+    room.abandonReason = 'opponent_left';
+    const payload = { roomId, reason: 'opponent_left', ...getRoomState(room) };
+    io.to(roomId).emit('opponentDisconnected', payload);
+    io.to(roomId).emit('clockUpdate', {
+        whiteTime: room.whiteTime,
+        blackTime: room.blackTime,
+        activeClock: null,
+    });
 }
 
 app.use(express.json());
@@ -290,6 +313,17 @@ io.on('connection', (sock) => {
         if (!rid || !rooms[rid]) return;
         const room = rooms[rid];
         sock.emit('stateSync', { roomId: rid, ...getRoomState(room) });
+    });
+
+    sock.on('resetAfterOpponentLeft', ({ roomId }) => {
+        const rid = (roomId || '').toString();
+        const room = rooms[rid];
+        if (!room) return;
+        if (room.white !== sock.id && room.black !== sock.id) return;
+        const count = (room.white ? 1 : 0) + (room.black ? 1 : 0);
+        if (count !== 1) return;
+        resetRoomForWaitingMatch(room);
+        io.to(rid).emit('stateSync', { roomId: rid, ...getRoomState(room) });
     });
 
     sock.on('rematch_request', ({ roomId }) => {

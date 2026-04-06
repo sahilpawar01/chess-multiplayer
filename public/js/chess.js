@@ -17,6 +17,7 @@ const socket = window.io(window.location.origin, {
   let soundOn = true;
   let prevMoveCount = 0;
   let lastHistoryLen = -1;
+  let lastGameStatus = 'waiting';
 
   const $ = (id) => document.getElementById(id);
 
@@ -50,6 +51,7 @@ const socket = window.io(window.location.origin, {
     modalDraw: $('modal-draw'),
     modalPromo: $('modal-promo'),
     promoGrid: $('promo-grid'),
+    modalAbandon: $('modal-abandon'),
     toasts: $('toasts'),
     topbar: $('topbar'),
   };
@@ -253,7 +255,12 @@ const socket = window.io(window.location.origin, {
           pe.textContent = pieceChar(square);
           const myTurn = chess.turn() === square.color;
           const myPiece = role === square.color;
-          pe.draggable = !!(myTurn && myPiece && !chess.isGameOver());
+          pe.draggable = !!(
+            myTurn &&
+            myPiece &&
+            lastGameStatus === 'playing' &&
+            !chess.isGameOver()
+          );
           if (pe.draggable) pe.classList.add('draggable');
           pe.addEventListener('dragstart', (e) => {
             if (!pe.draggable) return;
@@ -293,6 +300,10 @@ const socket = window.io(window.location.origin, {
 
   function tryMove(from, to) {
     if (!roomId || !role) return;
+    if (lastGameStatus !== 'playing') {
+      toast('Game is not in progress');
+      return;
+    }
     const turn = chess.turn();
     if (turn !== role) {
       toast("Not your turn");
@@ -341,12 +352,28 @@ const socket = window.io(window.location.origin, {
   }
 
   function applyState(payload) {
+    if (!payload.abandonReason) {
+      hideAbandonedModal();
+    }
+    if (payload.status) {
+      lastGameStatus = payload.status;
+    }
     if (payload.fen) chess.load(payload.fen);
     const moves = payload.movesSan || chess.history();
     if (payload.lastMove && payload.lastMove.from) {
       lastFrom = payload.lastMove.from;
       lastTo = payload.lastMove.to;
     } else {
+      lastFrom = null;
+      lastTo = null;
+    }
+    if (
+      payload.movesSan &&
+      payload.movesSan.length === 0 &&
+      payload.status === 'waiting'
+    ) {
+      prevMoveCount = 0;
+      lastHistoryLen = -1;
       lastFrom = null;
       lastTo = null;
     }
@@ -360,6 +387,7 @@ const socket = window.io(window.location.origin, {
     renderHistory(payload.movesSan);
     updateTimers(payload);
     highlightTurn(payload);
+    setPlayerNames(payload);
   }
 
   function updateTimers(p) {
@@ -374,9 +402,33 @@ const socket = window.io(window.location.origin, {
   }
 
   function highlightTurn(p) {
-    const t = p.turn || chess.turn();
-    els.cardWhite.classList.toggle('active', t === 'w');
-    els.cardBlack.classList.toggle('active', t === 'b');
+    const ac = p.activeClock;
+    if (p.status !== 'playing' || ac == null) {
+      els.cardWhite.classList.remove('active');
+      els.cardBlack.classList.remove('active');
+      return;
+    }
+    els.cardWhite.classList.toggle('active', ac === 'w');
+    els.cardBlack.classList.toggle('active', ac === 'b');
+  }
+
+  function setPlayerNames(data) {
+    if (data.whiteName !== undefined) {
+      els.nameWhite.textContent = data.whiteName ? data.whiteName : 'Waiting…';
+    }
+    if (data.blackName !== undefined) {
+      els.nameBlack.textContent = data.blackName ? data.blackName : 'Waiting…';
+    }
+  }
+
+  function showAbandonedModal() {
+    hideGameOver();
+    els.modalDraw.classList.add('hidden');
+    els.modalAbandon.classList.remove('hidden');
+  }
+
+  function hideAbandonedModal() {
+    els.modalAbandon.classList.add('hidden');
   }
 
   function showGameOver(data) {
@@ -413,8 +465,7 @@ const socket = window.io(window.location.origin, {
     els.roleBadge.textContent = role === 'w' ? 'White' : 'Black';
     els.roleBadge.classList.toggle('role-w', role === 'w');
     els.roleBadge.classList.toggle('role-b', role === 'b');
-    if (data.whiteName) els.nameWhite.textContent = data.whiteName;
-    if (data.blackName) els.nameBlack.textContent = data.blackName;
+    setPlayerNames(data);
     renderCoords();
     applyState(data);
   }
@@ -486,6 +537,15 @@ const socket = window.io(window.location.origin, {
   $('btn-lobby').addEventListener('click', () => {
     window.location.href = baseUrl();
   });
+  $('btn-abandon-new').addEventListener('click', () => {
+    if (!roomId) return;
+    socket.emit('resetAfterOpponentLeft', { roomId });
+    hideAbandonedModal();
+    toast('New game — share the room link for an opponent');
+  });
+  $('btn-abandon-lobby').addEventListener('click', () => {
+    window.location.href = baseUrl();
+  });
 
   els.themeSelect.addEventListener('change', () => {
     const v = els.themeSelect.value;
@@ -517,8 +577,7 @@ const socket = window.io(window.location.origin, {
   });
 
   socket.on('roomUpdate', (data) => {
-    if (data.whiteName) els.nameWhite.textContent = data.whiteName;
-    if (data.blackName) els.nameBlack.textContent = data.blackName;
+    setPlayerNames(data);
     if (data.fen) applyState(data);
   });
 
@@ -561,10 +620,17 @@ const socket = window.io(window.location.origin, {
   socket.on('draw_declined', () => toast('Draw declined'));
 
   socket.on('gameOver', (data) => {
+    lastGameStatus = 'ended';
     showGameOver(data);
   });
 
-  socket.on('opponentDisconnected', () => {
+  socket.on('opponentDisconnected', (data) => {
+    if (data && data.fen) {
+      applyState(data);
+    }
+    if (data && data.reason === 'opponent_left') {
+      showAbandonedModal();
+    }
     toast('Opponent disconnected');
   });
 
@@ -578,6 +644,7 @@ const socket = window.io(window.location.origin, {
     lastTo = null;
     prevMoveCount = 0;
     lastHistoryLen = -1;
+    lastGameStatus = 'playing';
     toast('New game');
     applyState(data);
   });

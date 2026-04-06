@@ -149,6 +149,17 @@
     </div>
   </div>
 
+  <div id="modal-abandon" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="abandon-title">
+    <div class="modal">
+      <h2 id="abandon-title">Opponent disconnected</h2>
+      <p id="abandon-body">The game is paused and clocks are frozen. Start a new game in this room (board resets; same room code) while you wait for a new opponent, or return to the lobby.</p>
+      <div class="btn-row" style="margin-top:1rem">
+        <button type="button" class="primary" id="btn-abandon-new">Start new game</button>
+        <button type="button" id="btn-abandon-lobby">Back to lobby</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-wrap" id="toasts" aria-live="polite"></div>
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
