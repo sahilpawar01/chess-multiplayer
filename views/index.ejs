@@ -1,101 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
-    <style>
-        .chessboard {
-            display: grid;
-            grid-template-columns: repeat(8, minmax(0, 1fr));
-            grid-template-rows: repeat(8, minmax(0, 1fr));
-            width: 400px;
-            height: 400px;
-            transform: rotate(0deg);
-        }
-
-        .piece.white {
-            color: white;
-            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 1));
-        }
-
-        .piece.black {
-            color: black;
-        }
-        .flipped {
-            transform: rotate(180deg);
-        }
-
-        .square {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .square.light {
-            background-color: #f0d9b5;
-        }
-
-        .square.dark {
-            background-color: #b58863;
-        }
-
-        .piece {
-            font-size: 36px;
-            cursor: pointer;
-            font-family: 'Noto Sans Symbols', sans-serif;
-        }
-
-        .piece.draggable {
-            cursor: grab;
-        }
-
-        .dragging {
-            opacity: 0.5;
-        }
-
-        /* Rotate pieces for black player */
-        .flipped .piece {
-            transform: rotate(180deg);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Multiplayer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    
-    <div class=" w-full h-screen bg-zinc-900 flex items-center justify-center">
-        <div class="chessboard w-96 h-96 bg-red-800"></div>
+  <div id="app">
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <span class="logo">Chess</span>
+        <span class="badge mono" id="room-badge">—</span>
+        <span class="badge role-w hidden" id="role-badge">White</span>
+      </div>
+      <div class="status-bar">
+        <span class="dot" id="conn-dot" title="Connection"></span>
+        <span class="text-muted mono" id="conn-label">Connecting…</span>
+      </div>
+    </header>
+
+    <section id="screen-lobby" class="screen">
+      <div class="lobby-card">
+        <h1>Play online</h1>
+        <div class="field">
+          <label for="player-name">Your name</label>
+          <input type="text" id="player-name" maxlength="32" placeholder="Guest" autocomplete="nickname">
+        </div>
+        <div class="field">
+          <label for="room-code">Room code</label>
+          <input type="text" id="room-code" class="mono" maxlength="8" placeholder="Generate or paste" autocomplete="off">
+        </div>
+        <div class="btn-row">
+          <button type="button" class="primary" id="btn-generate">Generate room</button>
+          <button type="button" id="btn-copy-lobby">Copy link</button>
+        </div>
+        <div class="btn-row" style="margin-top:1rem">
+          <button type="button" class="primary" id="btn-create-white">Create room (White)</button>
+          <button type="button" id="btn-join-black">Join room (Black)</button>
+        </div>
+        <p style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted)">Share the link so a friend joins as Black with the same code.</p>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden">
+      <div class="game-layout">
+        <aside class="panel left-col">
+          <h3>Players</h3>
+          <div class="player-card" id="card-white">
+            <div class="avatar">♔</div>
+            <div class="player-meta">
+              <div class="name" id="name-white">White</div>
+              <div class="timer mono" id="timer-white">10:00</div>
+            </div>
+          </div>
+          <div class="player-card" id="card-black">
+            <div class="avatar">♚</div>
+            <div class="player-meta">
+              <div class="name" id="name-black">Black</div>
+              <div class="timer mono" id="timer-black">10:00</div>
+            </div>
+          </div>
+          <h3 style="margin-top:1rem">Captured</h3>
+          <div class="captured-line" id="captured-white"></div>
+          <div class="captured-line" id="captured-black"></div>
+          <div class="material mono" id="material-score"></div>
+        </aside>
+
+        <div class="center-col">
+          <div class="status-bar">
+            <span class="badge mono" id="game-room-pill">Room</span>
+            <button type="button" class="btn" id="btn-copy-game">Copy link</button>
+          </div>
+          <div class="board-wrap">
+            <div class="board-coords ranks" id="ranks-coords"></div>
+            <div class="chessboard" id="board"></div>
+            <div class="board-coords files" id="files-coords"></div>
+          </div>
+        </div>
+
+        <aside class="panel right-col">
+          <h3>Moves</h3>
+          <div class="move-history" id="move-history"></div>
+          <h3 style="margin-top:1rem">Chat</h3>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" maxlength="500" placeholder="Message…" autocomplete="off">
+            <button type="button" class="primary" id="btn-chat-send">Send</button>
+          </div>
+          <div class="quick-msgs">
+            <button type="button" data-qm="Good game!">Good game!</button>
+            <button type="button" data-qm="Nice move!">Nice move!</button>
+            <button type="button" data-qm="Rematch?">Rematch?</button>
+          </div>
+          <h3 style="margin-top:1rem">Controls</h3>
+          <div class="controls">
+            <div class="control-block">
+              <label>Board theme</label>
+              <select id="theme-select">
+                <option value="classic">Classic</option>
+                <option value="green">Green</option>
+                <option value="ice">Ice</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="btn-draw">Offer draw</button>
+              <button type="button" id="btn-resign">Resign</button>
+            </div>
+            <div class="control-block" style="margin-top:0.5rem">
+              <label><input type="checkbox" id="sound-toggle" checked> Sound effects</label>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-gameover" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="go-title">
+    <div class="modal">
+      <h2 id="go-title">Game over</h2>
+      <p id="go-body"></p>
+      <div class="btn-row" style="margin-top:1rem">
+        <button type="button" class="primary" id="btn-rematch">Rematch</button>
+        <button type="button" id="btn-lobby">Back to lobby</button>
+      </div>
     </div>
+  </div>
 
+  <div id="modal-draw" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Draw offered</h2>
+      <p>Your opponent offered a draw.</p>
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-draw-accept">Accept</button>
+        <button type="button" id="btn-draw-decline">Decline</button>
+      </div>
+    </div>
+  </div>
 
+  <div id="modal-promo" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Promote pawn</h2>
+      <p>Choose a piece.</p>
+      <div class="promo-grid" id="promo-grid"></div>
+    </div>
+  </div>
 
+  <div class="toast-wrap" id="toasts" aria-live="polite"></div>
 
-
-
-
-
-
-
-
-
-
-
-
-    
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" 
-    integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" 
-    crossorigin="anonymous"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" 
-    integrity="sha512-xRllwz2gdZciIB+AkEbeq+gVhX8VB8XsfqeFbUh+SzHlN96dEduwtTuVuc2u9EROlmW9+yhRlxjif66ORpsgVA==" 
-    crossorigin="anonymous" 
-    referrerpolicy="no-referrer"></script>
-
-
-    <script src="/js/chessgame.js"></script>
-
-
-
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js" crossorigin="anonymous"></script>
+  <script>
+    window.__INITIAL_ROOM__ = "<%= (initialRoom || '').replace(/[^A-Za-z0-9]/g, '') %>";
+  </script>
+  <script src="/js/chess.js"></script>
 </body>
 </html>
